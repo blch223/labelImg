@@ -1602,6 +1602,7 @@ def get_main_app(argv=[]):
     Standard boilerplate Qt application code.
     Do everything but app.exec_() -- so that we can test the application in one thread
     """
+    print(argv)
     app = QApplication(argv)
     app.setApplicationName(__appname__)
     app.setWindowIcon(newIcon("app"))
@@ -1613,7 +1614,8 @@ def get_main_app(argv=[]):
                            nargs="?")
     argparser.add_argument("save_dir", nargs="?", default='auto-training/annots/')
     argparser.add_argument("upload_id", nargs="?")
-    args = argparser.parse_args(argv[1:])
+    #args = argparser.parse_args(argv[1:])
+    args = argparser.parse_args(argv)
     # Usage : labelImg.py image predefClassFile saveDir
     win = MainWindow(args.image_dir,
                      args.predefined_classes_file,
@@ -1623,10 +1625,10 @@ def get_main_app(argv=[]):
     return app, win
 
 
-def main():
+def main(argv):
     '''construct main app and run it'''
-    app, _win = get_main_app(sys.argv)
+    app, _win = get_main_app(argv)
     return app.exec_()
 
-if __name__ == '__main__':
-    sys.exit(main())
+# if __name__ == '__main__':
+#     sys.exit(main())

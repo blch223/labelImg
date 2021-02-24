@@ -49,6 +49,12 @@ from libs.create_ml_io import JSON_EXT
 from libs.ustr import ustr
 from libs.hashableQListWidgetItem import HashableQListWidgetItem
 
+utilsDir = os.path.join(os.path.dirname(__file__), '..')
+if utilsDir not in sys.path:
+    sys.path.append(utilsDir)
+
+from utils import driveutils
+
 __appname__ = 'labelImg'
 
 
@@ -74,7 +80,7 @@ class WindowMixin(object):
 class MainWindow(QMainWindow, WindowMixin):
     FIT_WINDOW, FIT_WIDTH, MANUAL_ZOOM = list(range(3))
 
-    def __init__(self, defaultFilename=None, defaultPrefdefClassFile=None, defaultSaveDir=None):
+    def __init__(self, defaultFilename=None, defaultPrefdefClassFile=None, defaultSaveDir=None, defaultUploadId=None):
         super(MainWindow, self).__init__()
         self.setWindowTitle(__appname__)
 
@@ -89,7 +95,9 @@ class MainWindow(QMainWindow, WindowMixin):
 
         # Save as Pascal voc xml
         self.defaultSaveDir = defaultSaveDir
-        self.labelFileFormat = settings.get(SETTING_LABEL_FILE_FORMAT, LabelFileFormat.PASCAL_VOC)
+        self.labelFileFormat = settings.get(SETTING_LABEL_FILE_FORMAT, LabelFileFormat.YOLO)
+        self.defaultUploadId = defaultUploadId
+        self.defaultClasses = defaultPrefdefClassFile
 
         # For loading all image under a directory
         self.mImgList = []
@@ -248,7 +256,7 @@ class MainWindow(QMainWindow, WindowMixin):
         save_format = action(getFormatMeta(self.labelFileFormat)[0],
                              self.change_format, 'Ctrl+',
                              getFormatMeta(self.labelFileFormat)[1],
-                             getStr('changeSaveFormat'), enabled=True)
+                             getStr('changeSaveFormat'), enabled=False)
 
         saveAs = action(getStr('saveAs'), self.saveFileAs,
                         'Ctrl+Shift+S', 'save-as', getStr('saveAsDetail'), enabled=False)
@@ -380,7 +388,7 @@ class MainWindow(QMainWindow, WindowMixin):
 
         # Auto saving : Enable auto saving if pressing next
         self.autoSaving = QAction(getStr('autoSaveMode'), self)
-        self.autoSaving.setCheckable(True)
+        self.autoSaving.setCheckable(False)
         self.autoSaving.setChecked(settings.get(SETTING_AUTO_SAVE, False))
         # Sync single class mode from PR#106
         self.singleClassMode = QAction(getStr('singleClsMode'), self)
@@ -1379,6 +1387,22 @@ class MainWindow(QMainWindow, WindowMixin):
             self._saveFile(savedPath if self.labelFile
                            else self.saveFileDialog(removeExt=False))
 
+
+        ### Upload to G-DRIVE
+        annotationFilepath = savedPath + '.txt'
+        annotFilename = savedFileName+'.txt'
+        updateFile = None
+
+        fileInfo = driveutils.DriveUtils.getFile(annotFilename, self.defaultUploadId)
+
+        annotateImageDriveFile = driveutils.DriveUtils.uploadFile(
+            annotationFilepath,
+            self.defaultUploadId,
+            file=fileInfo,
+            filename=annotFilename,
+            mimetype='text/plain'
+        )
+
     def saveFileAs(self, _value=False):
         assert not self.image.isNull(), "cannot save empty image"
         self._saveFile(self.saveFileDialog())
@@ -1527,7 +1551,7 @@ class MainWindow(QMainWindow, WindowMixin):
             return
 
         self.set_format(FORMAT_YOLO)
-        tYoloParseReader = YoloReader(txtPath, self.image)
+        tYoloParseReader = YoloReader(txtPath, self.image, self.defaultClasses)
         shapes = tYoloParseReader.getShapes()
         print (shapes)
         self.loadLabels(shapes)
@@ -1583,16 +1607,18 @@ def get_main_app(argv=[]):
     app.setWindowIcon(newIcon("app"))
     # Tzutalin 201705+: Accept extra agruments to change predefined class file
     argparser = argparse.ArgumentParser()
-    argparser.add_argument("image_dir", nargs="?")
+    argparser.add_argument("image_dir", nargs="?", default='auto-training/annots/')
     argparser.add_argument("predefined_classes_file",
                            default=os.path.join(os.path.dirname(__file__), "data", "predefined_classes.txt"),
                            nargs="?")
-    argparser.add_argument("save_dir", nargs="?")
+    argparser.add_argument("save_dir", nargs="?", default='auto-training/annots/')
+    argparser.add_argument("upload_id", nargs="?")
     args = argparser.parse_args(argv[1:])
     # Usage : labelImg.py image predefClassFile saveDir
     win = MainWindow(args.image_dir,
                      args.predefined_classes_file,
-                     args.save_dir)
+                     args.save_dir,
+                     args.upload_id)
     win.show()
     return app, win
 
